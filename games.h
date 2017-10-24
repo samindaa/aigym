@@ -40,34 +40,34 @@ class Game;
 
 class Player {
  public:
-  virtual ~Player() {}
-  virtual std::pair<size_t, size_t> move(Game *game, const GameState *state) = 0;
+  virtual std::pair<size_t, size_t> move(const Game *const game, const std::shared_ptr<GameState> &state) = 0;
 };
 
 class Game {
  public:
-  GameState *initial;
+  size_t k;
+  std::shared_ptr<GameState> initial;
 
-  Game() : initial(nullptr) {}
-  virtual ~Game() {}
+  explicit Game(const size_t &k) : k(k) {}
 
-  virtual const std::unordered_set<std::pair<size_t, size_t>> &actions(const GameState *state) const = 0;
-  virtual GameState *result(const GameState *state, const std::pair<size_t, size_t> &move) =0;
-  virtual double utility(const GameState *state, const std::string &player) const =0;
-  virtual bool terminalTest(const GameState *state) const = 0;
+  virtual const std::unordered_set<std::pair<size_t,
+                                             size_t>> &actions(const std::shared_ptr<GameState> &state) const = 0;
+  virtual std::shared_ptr<GameState> result(const std::shared_ptr<GameState> &state,
+                                            const std::pair<size_t, size_t> &move) const =0;
+  virtual double utility(const std::shared_ptr<GameState> &state, const std::string &player) const =0;
+  virtual bool terminalTest(const std::shared_ptr<GameState> &state) const = 0;
 
-  virtual std::string toMove(const GameState *state) const {
+  virtual std::string toMove(const std::shared_ptr<GameState> &state) const {
     return state->toMove;
   }
 
-  virtual void display(const GameState *state) {}
+  virtual void display(const std::shared_ptr<GameState> &state) const {}
 
-  virtual double playGame(const std::vector<Player *> &players) {
-    assert(initial);
+  virtual double playGame(const std::vector<std::shared_ptr<Player>> &players) {
     auto state = initial;
 //    display(state);
     while (true) {
-      for (auto player : players) {
+      for (const auto &player : players) {
         auto move = player->move(this, state);
         state = result(state, move);
         //display(state);
@@ -81,11 +81,8 @@ class Game {
 };
 
 class TicTacToe : public Game {
-  size_t k;
-  std::vector<GameState *> gameStates;
-
  public:
-  explicit TicTacToe(const size_t &k = 3) : k(k) {
+  explicit TicTacToe(const size_t &k = 3) : Game(k) {
     std::unordered_set<std::pair<size_t, size_t>> moves;
 
     for (auto i = 0; i < k; ++i) {
@@ -94,42 +91,34 @@ class TicTacToe : public Game {
       }
     }
 
-    initial = new GameState("X", 0.0, {}, moves);
+    initial = std::shared_ptr<GameState>(new GameState("X", 0.0, {}, moves));
   }
 
-  ~TicTacToe() override {
-    delete initial;
-    for (auto *s : gameStates) {
-      delete s;
-    }
-  }
-
-  const std::unordered_set<std::pair<size_t, size_t>> &actions(const GameState *state) const override {
+  const std::unordered_set<std::pair<size_t, size_t>> &actions(const std::shared_ptr<GameState> &state) const override {
     return state->moves;
   }
 
-  GameState *result(const GameState *state, const std::pair<size_t, size_t> &move) override {
+  std::shared_ptr<GameState> result(const std::shared_ptr<GameState> &state,
+                                    const std::pair<size_t, size_t> &move) const override {
     auto board = state->board; // deep copy
     board.emplace(move, state->toMove);
     auto moves = state->moves; // deep copy
     moves.erase(move);
-    GameState *newGameState = new GameState(state->toMove == "X" ? "O" : "X",
-                                            computeUtility(board, move, state->toMove),
-                                            board,
-                                            moves);
-    gameStates.emplace_back(newGameState);
-    return newGameState;
+    return std::make_shared<GameState>(state->toMove == "X" ? "O" : "X",
+                                       computeUtility(board, move, state->toMove),
+                                       board,
+                                       moves);
   }
 
-  double utility(const GameState *state, const std::string &player) const override {
+  double utility(const std::shared_ptr<GameState> &state, const std::string &player) const override {
     return player == "X" ? state->utility : -state->utility;
   }
 
-  bool terminalTest(const GameState *state) const override {
+  bool terminalTest(const std::shared_ptr<GameState> &state) const override {
     return state->utility != 0 || state->moves.empty();
   }
 
-  void display(const GameState *state) override {
+  void display(const std::shared_ptr<GameState> &state) const override {
     for (auto i = 0; i < k; ++i) {
       for (auto j = 0; j < k; ++j) {
         auto iter = state->board.find({i, j});
@@ -146,7 +135,7 @@ class TicTacToe : public Game {
 
  private:
   double computeUtility(const std::unordered_map<std::pair<size_t, size_t>, std::string> &board,
-                        const std::pair<size_t, size_t> &move, const std::string &player) {
+                        const std::pair<size_t, size_t> &move, const std::string &player) const {
     if (kInRow(board, move, player, {0, 1}) ||
         kInRow(board, move, player, {1, 0}) ||
         kInRow(board, move, player, {1, -1}) ||
@@ -159,7 +148,7 @@ class TicTacToe : public Game {
 
   bool kInRow(const std::unordered_map<std::pair<size_t, size_t>, std::string> &board,
               const std::pair<size_t, size_t> &move,
-              const std::string &player, const std::pair<int, int> &deltaXy) {
+              const std::string &player, const std::pair<int, int> &deltaXy) const {
     double n = 0;
 
     auto x = move.first, y = move.second;
@@ -191,7 +180,7 @@ class RandomPlayer : public Player {
  public:
   RandomPlayer() : e(r()) {}
 
-  std::pair<size_t, size_t> move(Game *game, const GameState *state) override {
+  std::pair<size_t, size_t> move(const Game *const game, const std::shared_ptr<GameState> &state) override {
     std::uniform_int_distribution<size_t> uniform_dist(0, state->moves.size() - 1);
     auto it(state->moves.begin());
     std::advance(it, uniform_dist(e));
@@ -201,7 +190,7 @@ class RandomPlayer : public Player {
 
 class MinMaxPlayer : public Player {
  public:
-  std::pair<size_t, size_t> move(Game *game, const GameState *state) override {
+  std::pair<size_t, size_t> move(const Game *const game, const std::shared_ptr<GameState> &state) override {
     auto player = state->toMove;
     auto bestScore = -std::numeric_limits<double>::max();
     std::pair<size_t, size_t> bestAction;
@@ -216,7 +205,9 @@ class MinMaxPlayer : public Player {
   }
 
  private:
-  double maxValue(Game *game, const GameState *state, const std::string &player) {
+  double maxValue(const Game *const game,
+                  const std::shared_ptr<GameState> &state,
+                  const std::string &player) {
     if (game->terminalTest(state)) {
       return game->utility(state, player);
     }
@@ -229,7 +220,9 @@ class MinMaxPlayer : public Player {
     return v;
   }
 
-  double minValue(Game *game, const GameState *state, const std::string &player) {
+  double minValue(const Game *const game,
+                  const std::shared_ptr<GameState> &state,
+                  const std::string &player) {
     if (game->terminalTest(state)) {
       return game->utility(state, player);
     }
@@ -245,7 +238,7 @@ class MinMaxPlayer : public Player {
 
 class AlphaBetaPlayer : public Player {
  public:
-  std::pair<size_t, size_t> move(Game *game, const GameState *state) override {
+  std::pair<size_t, size_t> move(const Game *const game, const std::shared_ptr<GameState> &state) override {
     auto player = state->toMove;
     auto bestScore = -std::numeric_limits<double>::max();
     std::pair<size_t, size_t> bestAction;
@@ -264,7 +257,11 @@ class AlphaBetaPlayer : public Player {
   }
 
  private:
-  double maxValue(Game *game, const GameState *state, const std::string &player, double alpha, double beta) {
+  double maxValue(const Game *const game,
+                  const std::shared_ptr<GameState> &state,
+                  const std::string &player,
+                  double alpha,
+                  double beta) {
     if (game->terminalTest(state)) {
       return game->utility(state, player);
     }
@@ -281,7 +278,11 @@ class AlphaBetaPlayer : public Player {
     return v;
   }
 
-  double minValue(Game *game, const GameState *state, const std::string &player, double alpha, double beta) {
+  double minValue(const Game *const game,
+                  const std::shared_ptr<GameState> &state,
+                  const std::string &player,
+                  double alpha,
+                  double beta) {
     if (game->terminalTest(state)) {
       return game->utility(state, player);
     }
@@ -301,15 +302,14 @@ class AlphaBetaPlayer : public Player {
 
 class QueryPlayer : public Player {
  public:
-  std::pair<size_t, size_t> move(Game *game, const GameState *state) override {
-    // TODO: assume k = 3; pass k via game_meta?
+  std::pair<size_t, size_t> move(const Game *const game, const std::shared_ptr<GameState> &state) override {
 
-    auto pToIdx = [](const std::pair<size_t, size_t> &p) {
-      return p.first * 3 + p.second;
+    auto pToIdx = [&game](const std::pair<size_t, size_t> &p) {
+      return p.first * game->k + p.second;
     };
 
-    auto idxToP = [](const size_t &idx) -> std::pair<size_t, size_t> {
-      return {idx / 3, idx % 3};
+    auto idxToP = [&game](const size_t &idx) -> std::pair<size_t, size_t> {
+      return {idx / game->k, idx % game->k};
     };
 
     size_t i;
@@ -321,7 +321,7 @@ class QueryPlayer : public Player {
     game->display(state);
     std::cout << "Your move? ";
     std::cin >> i;
-    assert(i < 3 * 3);
+    assert(i < game->k * game->k);
     return idxToP(i);
   }
 };

@@ -4,16 +4,13 @@
 void testBoard() {
   TicTacToe ttt;
   //ttt.display(ttt.initial);
-  Player *dummyPlayer = new RandomPlayer();
-  Player *queryPlayer = new QueryPlayer();
-  //Player *minMaxPlayer = new MinMaxPlayer();
-  Player *aiPlayer = new MinMaxPlayer();
-  for (auto i = 0; i < 10; ++i) {
-    std::cout << "res: (" << i << ")\n" << ttt.playGame({queryPlayer, aiPlayer}) << std::endl;
+  auto dummyPlayer = std::make_shared<RandomPlayer>();
+  auto queryPlayer = std::make_shared<QueryPlayer>();
+  auto minMaxPlayer = std::make_shared<MinMaxPlayer>();
+  auto aiPlayer = std::make_shared<MinMaxPlayer>();
+  for (auto i = 0; i < 1; ++i) {
+    std::cout << "res: (" << i << ")\n" << ttt.playGame({dummyPlayer, aiPlayer}) << std::endl;
   }
-  delete dummyPlayer;
-  delete queryPlayer;
-  delete aiPlayer;
 }
 
 void testHash() {
