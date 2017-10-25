@@ -2,15 +2,14 @@
 #include "games.h"
 
 void testBoard() {
-  TicTacToe ttt;
-  //ttt.display(ttt.initial);
+  TicTacToe ttt(5);
   auto dummyPlayer = std::make_shared<RandomPlayer>();
   auto queryPlayer = std::make_shared<QueryPlayer>();
   auto minMaxPlayer = std::make_shared<MinMaxPlayer>();
   auto alphaBetaPlayer = std::make_shared<AlphaBetaPlayer>();
-  auto mctsPlayer = std::make_shared<MctsPlayer>();
-  for (auto i = 0; i < 1; ++i) {
-    std::cout << "res: (" << i << ")\n" << ttt.playGame({mctsPlayer, dummyPlayer}) << std::endl;
+  auto mctsPlayer = std::make_shared<MctsPlayer>(1000);
+  for (auto i = 0; i < 2; ++i) {
+    std::cout << "res: (" << i << ")\n" << ttt.playGame({dummyPlayer, mctsPlayer}) << std::endl;
   }
 }
 
