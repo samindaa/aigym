@@ -63,14 +63,12 @@ class Game {
 
   virtual void display(const std::shared_ptr<GameState> &state) const {}
 
-  virtual double playGame(const std::vector<std::shared_ptr<Player>> &players) {
+  virtual double playGame(const std::vector<std::shared_ptr<Player>> &players) const {
     auto state = initial;
-//    display(state);
     while (true) {
       for (const auto &player : players) {
         auto move = player->move(this, state);
         state = result(state, move);
-        //display(state);
         if (terminalTest(state)) {
           display(state);
           return utility(state, initial->toMove);
@@ -324,6 +322,147 @@ class QueryPlayer : public Player {
     assert(i < game->k * game->k);
     return idxToP(i);
   }
+};
+
+class MctsPlayer : public Player {
+ protected:
+  class TreeNode {
+   public:
+    std::vector<std::shared_ptr<TreeNode>> children;
+    std::shared_ptr<GameState> state;
+    std::weak_ptr<TreeNode> parent;
+    double numVisits;
+    double totValue;
+
+    TreeNode() : numVisits(0),
+                 totValue(0) {}
+
+    bool isLeaf() const {
+      return children.empty();
+    }
+  };
+
+  std::random_device rd;
+  std::mt19937 gen;
+  std::uniform_real_distribution<> dist;
+  std::shared_ptr<Player> player;
+  size_t maxIter;
+
+ public:
+  MctsPlayer() : gen(rd()),
+                 dist(0.0, 1.0),
+                 player(std::make_shared<RandomPlayer>()),
+                 maxIter(1000) {}
+
+  std::pair<size_t, size_t> move(const Game *const game,
+                                 const std::shared_ptr<GameState> &state) override {
+    std::shared_ptr<TreeNode> root = std::make_shared<TreeNode>();
+    root->state = state;
+    //game->display(root->state);
+
+    for (auto i = 0; i < maxIter; ++i) {
+      auto node = root;
+      node = select(game, node);
+      //game->display(node->state);
+      node = expand(game, node);
+      //game->display(node->state);
+      auto z = simulation(game, node);
+      //game->display(z);
+      backPropagate(game, node, z);
+    }
+
+    auto bestValue = -std::numeric_limits<double>::max();
+    auto bestNode = root;
+    for (auto &c : root->children) {
+      double value = c->totValue;
+      if (value > bestValue) {
+        bestValue = value;
+        bestNode = c;
+      }
+    }
+
+    assert(root->state->moves.size() - 1 == bestNode->state->moves.size());
+    std::pair<size_t, size_t> move;
+    for (auto &p : root->state->moves) {
+      auto iter = bestNode->state->moves.find(p);
+      if (iter == bestNode->state->moves.end()) {
+        move = p;
+        break;
+      }
+    }
+    return move;
+  }
+
+  std::shared_ptr<TreeNode> select(const Game *const game,
+                                   std::shared_ptr<TreeNode> &root) {
+    std::shared_ptr<TreeNode> node = root;
+    while (!node->isLeaf() && !game->terminalTest(node->state)) {
+      node = select(node);
+      //game->display(node->state);
+    }
+    return node;
+  }
+
+  std::shared_ptr<TreeNode> select(std::shared_ptr<TreeNode> node) {
+    double bestValue = -std::numeric_limits<double>::max();
+    for (auto &c : node->children) {
+      auto uctValue = getUctValue(c);
+      if (uctValue > bestValue) {
+        bestValue = uctValue;
+        node = c;
+      }
+    }
+    return node;
+  }
+
+  std::shared_ptr<TreeNode> expand(const Game *const game,
+                                   std::shared_ptr<TreeNode> &node) {
+    if (game->terminalTest(node->state)) {
+      return node;
+    }
+
+    auto move = player->move(game, node->state);
+    auto newState = game->result(node->state, move);
+    std::shared_ptr<TreeNode> newNode = std::make_shared<TreeNode>();
+    newNode->state = newState;
+    newNode->parent = node;
+    node->children.emplace_back(newNode);
+    return newNode;
+  }
+
+  void backPropagate(const Game *const game,
+                     std::shared_ptr<TreeNode> node,
+                     const std::shared_ptr<GameState> &z) {
+    while (node.get()) {
+      ++node->numVisits;
+      node->totValue += game->utility(z, node->state->toMove);
+      //game->display(node->state);
+      node = node->parent.lock();
+    }
+  }
+
+  std::shared_ptr<GameState> simulation(const Game *const game,
+                                        const std::shared_ptr<TreeNode> &node) const {
+    auto state = node->state;
+    while (!game->terminalTest(state)) {
+      for (const auto &p : {player, player}) {
+        auto move = p->move(game, state);
+        state = game->result(state, move);
+        if (game->terminalTest(state)) {
+          break;
+        }
+      }
+    }
+    return state;
+  }
+
+  double getUctValue(const std::shared_ptr<TreeNode> &c) {
+    const double uctValue = c->totValue / (c->numVisits + std::numeric_limits<double>::epsilon()) +
+        std::sqrt(std::log(c->numVisits + 1) / (c->numVisits + std::numeric_limits<double>::epsilon())) +
+        dist(gen) * std::numeric_limits<double>::epsilon();
+    return uctValue;
+  }
+
 };
 
 #endif //AIMA_GAMES_H

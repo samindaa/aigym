@@ -7,9 +7,10 @@ void testBoard() {
   auto dummyPlayer = std::make_shared<RandomPlayer>();
   auto queryPlayer = std::make_shared<QueryPlayer>();
   auto minMaxPlayer = std::make_shared<MinMaxPlayer>();
-  auto aiPlayer = std::make_shared<MinMaxPlayer>();
+  auto alphaBetaPlayer = std::make_shared<AlphaBetaPlayer>();
+  auto mctsPlayer = std::make_shared<MctsPlayer>();
   for (auto i = 0; i < 1; ++i) {
-    std::cout << "res: (" << i << ")\n" << ttt.playGame({dummyPlayer, aiPlayer}) << std::endl;
+    std::cout << "res: (" << i << ")\n" << ttt.playGame({mctsPlayer, dummyPlayer}) << std::endl;
   }
 }
 
